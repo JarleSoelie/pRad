@@ -97,8 +97,8 @@ int main(int argc, char *argv[]){
   
   //Prepare for hull (Head-phantom)
   TFile* phantomFile = new TFile("HeadPhantom.root","update");
-  TH3S* hull = new TH3S("hull", "Hounsfield Units", 1024,-90,102, 1024,-90,102, 128,-166.25,-6.25); //mm
-  phantomFile->GetObject("hu",hull); 
+  TH3S* HUnits = new TH3S("hull", "Hounsfield Units", 1024,-90,102, 1024,-90,102, 128,-166.25,-6.25); //mm
+  phantomFile->GetObject("hu",HUnits); 
   
   double x,y,z, xRot,yRot,zRot, xOrient,yOrient,zOrient;
     
