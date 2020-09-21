@@ -309,6 +309,8 @@ int main(int argc, char *argv[]){
   TH2F* angleSigX = new TH2F("angleSigX", "Angular sigma distribution in X direction", NbinsX, Xmin, Xmax, NbinsZ, Zmin, Zmax);
   TH2F* angleSigZ = new TH2F("angleSigZ", "Angular sigma distribution in Z direction", NbinsX, Xmin, Xmax, NbinsZ, Zmin, Zmax);
   TH2F* WEPLSig = new TH2F("WEPLSig", "WEPL sigma distribution", NbinsX, Xmin, Xmax, NbinsZ, Zmin, Zmax);
+  TH2F* WEPLfwhm = new TH2F("WEPLfwhm", "WEPL fwhm distribution", NbinsX, Xmin, Xmax, NbinsZ, Zmin, Zmax);
+
 	
   for( int binxid = 1; binxid<=(WEPLDist->GetXaxis()->GetNbins()); binxid++ ){  if(binxid%100 == 0) cout<<binxid<<endl; //For visualizing progress
     for( int binzid = 1; binzid<=(WEPLDist->GetYaxis()->GetNbins()); binzid++){
@@ -400,7 +402,8 @@ int main(int argc, char *argv[]){
 	    float mean = WEPLdistf->GetMean();
 		  WEPLMean->Fill(x,z,mean);
 		  float sig = WEPLdistf->GetStdDev();
-	   	WEPLSig->Fill(x,z,sig);
+	   	  WEPLSig->Fill(x,z,sig);
+		  WEPLfwhm->Fill(x,z,fwhm);
 	   
 	   	delete WEPLdistf;
     }
@@ -408,6 +411,8 @@ int main(int argc, char *argv[]){
    
   WEPLMean->Write("MeanWEPL",TObject::kOverwrite);
   WEPLSig->Write("SigWEPL",TObject::kOverwrite); 
+  WEPLfwhm->Write("FWHMWEPL",TObject::kOverwrite);
+	
   
   phaseFile->Close();
   
