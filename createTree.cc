@@ -111,10 +111,10 @@ int main(int argc, char *argv[]) {
 //----------------------------
 //Prepare and combine the root files from simulations/phasespace detectors
 //---------------------------- 
-  char enter1f[50] = "../output/entering11Ideal_"; //***
-  char enter2f[50] = "../output/entering12Ideal_"; //***
-  char exit1f[50] = "../output/exiting21Ideal_"; //***
-  char exit2f[50] = "../output/exiting22Ideal_"; //***
+  char enter1f[50] = "../output/entering11_Ideal_"; //***
+  char enter2f[50] = "../output/entering12_Ideal_"; //***
+  char exit1f[50] = "../output/exiting21_Ideal_"; //***
+  char exit2f[50] = "../output/exiting22_Ideal_"; //***
   
   char outf[50] = "../outputFiles/yourFileName_"; //***
   
