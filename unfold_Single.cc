@@ -137,6 +137,7 @@ int main(int argc, char *argv[]){
   TH2F* angleSigX = ((TH2F *)(gROOT->FindObject("SigAx")));
   TH2F* angleSigZ = ((TH2F *)(gROOT->FindObject("SigAz")));
   TH2F* WEPLSig = ((TH2F *)(gROOT->FindObject("SigWEPL")));
+  TH2F* WEPLfwhm = ((TH2F *)(gROOT->FindObject("FWHMWEPL")));
 
   if(angleMeanX && angleSigX){cout<<"Angle in x filter found"<<endl;}
   if(angleMeanZ && angleSigZ){cout<<"Angle in z filter found"<<endl;}
@@ -158,7 +159,8 @@ int main(int argc, char *argv[]){
     angleZ = Point.p2z - Point.p1z;
     WEPLn = Point.weplReal;
        
-    if( WEPLn >= (WEPLMean->GetBinContent(binGlobal) - 2.5*WEPLSig->GetBinContent(binGlobal)) && WEPLn <= (WEPLMean->GetBinContent(binGlobal) + 2.5*WEPLSig->GetBinContent(binGlobal)) &&
+    if( WEPLn >= (WEPLMean->GetBinContent(binGlobal) - 1*WEPLfwhm->GetBinContent(binGlobal)) && WEPLn <= (WEPLMean->GetBinContent(binGlobal) + 1*WEPLfwhm->GetBinContent(binGlobal)) &&
+	//WEPLn >= (WEPLMean->GetBinContent(binGlobal) - 2.5*WEPLSig->GetBinContent(binGlobal)) && WEPLn <= (WEPLMean->GetBinContent(binGlobal) + 2.5*WEPLSig->GetBinContent(binGlobal)) &&
         angleX >= (angleMeanX->GetBinContent(binGlobal) - 2.5*angleSigX->GetBinContent(binGlobal)) && angleX <= (angleMeanX->GetBinContent(binGlobal) + 2.5*angleSigX->GetBinContent(binGlobal)) && 
         angleZ >= (angleMeanZ->GetBinContent(binGlobal) - 2.5*angleSigZ->GetBinContent(binGlobal)) && angleZ <= (angleMeanZ->GetBinContent(binGlobal) + 2.5*angleSigZ->GetBinContent(binGlobal))
       ){  
