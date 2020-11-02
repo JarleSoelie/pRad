@@ -116,7 +116,7 @@ int main(int argc, char *argv[]) {
   char exit1f[50] = "../output/exiting21_Ideal_"; //***
   char exit2f[50] = "../output/exiting22_Ideal_"; //***
   
-  char outf[50] = "../outputFiles/yourFileName_"; //***
+  char outf[50] = "../output/yourFileName_"; //***
   
   strcat(enter1f,argv[1]);
   strcat(enter2f,argv[1]);
@@ -348,10 +348,10 @@ int main(int argc, char *argv[]) {
 	
 	    p1x = atan((newXenter2-newXenter1)/D_t);
 	    p1y = 1.0; //Forward facing
-      p1z = atan((newZenter2-newZenter1)/D_t);         
+      	    p1z = atan((newZenter2-newZenter1)/D_t);         
 		
 	    p2x = atan((newXexit2-newXexit1)/D_t);
-      p2y = 1.0; //Forward facing
+            p2y = 1.0; //Forward facing
 	    p2z = atan((newZexit2-newZexit1)/D_t);  
 				
 	    x11 = newXenter1;
