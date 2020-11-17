@@ -28,6 +28,7 @@ You might want to change the reconstruction area for the filtering (line 90-96) 
 **unfold_Single.cc** and **unfold_Double.cc**<br />
 This is where the reconstruction is happening. Define your MLP variables if you change anything (ideal or realistic), and your reconstruction area. This requires the filter distributions from the previous filterSS.cc or filterDS.cc to run correctly. 
 
+_____________________________________________________________________________________________________________________________
 For more information about the tracking system properties chosen for the simulations and reconstruction, see:<br /> "The impact of tracking system properties on the most likely path estimation in proton CT", by C. Bopp, et.al, **DOI: 10.1088/0031-9155/59/23/N197** <br />
 
 For more information on the MLP algorithm applied to this work, see: <br /> "A comprehensive theoretical comparison of proton imaging set-ups in terms of spatial resolution", by N. Krah et.al., **DOI: 10.1088/1361-6560/aaca1f** <br />
