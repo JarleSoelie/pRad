@@ -30,8 +30,8 @@
 #include <random>
 using namespace std;
 
-//All of these are in order of cm and so should all input to the ComputeMLP function!! (Alternatively, one can change the polyonomial factors into orders of mm)
-//230MeV
+//All of these are in order of cm and so should all input to the ComputeMLP function!! (Alternatively, one can change the polyonomial factors into orders of mm...)
+//230MeV protons
 #define azero   5.77059e-6
 #define aone    2.74001e-7
 #define atwo   -2.49026e-8
@@ -46,9 +46,9 @@ double s_angle = 0.003; //*** rad This should be the uncertainty on the TPS angl
 
 double s_pos_out = 0.0005; //*** cm Position uncertainty in tracking layers. 0.0 = ideal detector, 0.0005 = Bergen detector
 
-double d_entry = 0.0; //*** cm OBS! If not using manual hull, change accordingly (=0.0 if manual hull is used or found)
-double d_exit = 0.0; //*** cm
-double d_T = 5.0; //*** cm Distance between trackers 
+double d_entry = 0.0; //*** cm OBS! =0.0 if manual hull is used or found, which I am doing. If not using manual hull, change to the distance between front tracker position and phantom 
+double d_exit = 0.0; //*** cm Same as above, but instead use the distance between rear tracker position and phantom (i.e. 15 cm)
+double d_T = 5.0; //*** cm Distance between trackers in a single pair 
 
 int Nsteps = 512; //Number of steps to take in MLP
 
@@ -85,9 +85,9 @@ int main(int argc, char *argv[]){
   // Load Proton data
   Proton Point;
   
-  float d_phantom = 150.0; //*** mm between inner tracker and phantom edge. This is used to reduce the hull calculation time at later steps
+  float d_phantom = 150.0; //*** mm between inner tracker and phantom edge. This is used to reduce the hull calculation time at later steps and comes from the position of the tracker in the GATE simulation
   
-  //For defining the reconstruction area for filtering, 0.75x1.25 mm pixels in this case, but change to whatever you want
+  //For defining the reconstruction area for filtering, 0.75x1.25 mm pixels in this case, but change to whatever you find appropriate
   int NbinsX = 272; //*** 
   int NbinsZ = 128; //*** 
   float  Xmin = -102; //*** mm 
@@ -95,14 +95,14 @@ int main(int argc, char *argv[]){
   float  Zmin = -80; //*** mm 
   float  Zmax = 80; //*** mm 
   
-  //Prepare for hull (Head-phantom)
+  //Prepare for hull (Head-phantom!) This takes a toll on memory 
   TFile* phantomFile = new TFile("HeadPhantom.root","update");
-  TH3S* HUnits = new TH3S("hull", "Hounsfield Units", 1024,-90,102, 1024,-90,102, 128,-166.25,-6.25); //mm
+  TH3S* HUnits = new TH3S("hull", "Hounsfield Units", 1024,-90,102, 1024,-90,102, 128,-166.25,-6.25); //mm Same dimension as the dicom file/3D histogram
   phantomFile->GetObject("hu",HUnits); 
   
   double x,y,z, xRot,yRot,zRot, xOrient,yOrient,zOrient;
     
-  //Prepare in file from createTree	
+  //Prepare file from createTree	
   char rootf[10] = ".root";
   char inf[50] = "../outputFiles/yourFileName_";//***
   strcat(inf,argv[1]);
@@ -112,17 +112,17 @@ int main(int argc, char *argv[]){
   TTree* t = (TTree*)phaseFile->Get("OutTree"); //name from create Tree!   
   TTree *tt = new TTree("filteredTree", "Updated collection of tracker variables"); //***SET MANUALLY*** name of the new filtered tree
   
-//--------Head phantom hull map with rotation------------
+//--------Prepare head phantom hull map with rotation according to projection angle------------ This takes a heavy toll on memory... If you find a better way to find the hull, you can save a lot!
   float headAngle = (float)atoi(argv[1]);
   double radConv = 3.14159265/180.0;
-  TH3S* HUMap = new TH3S("HullMap", "Hounsfield Units", 1088,-102,102, 160,-100,100, 1600,-150,150); //Head phantom   
+  TH3S* HUMap = new TH3S("HullMap", "Hounsfield Units", 1088,-102,102, 160,-100,100, 1600,-150,150); //3D histogram covering all possible proton positions between trackers and reconstruction area!  
   for( int binzid = 1; binzid<=(HUnits->GetZaxis()->GetNbins()); binzid++){
-	  for( int binyid = 1; binyid<=(HUnits->GetYaxis()->GetNbins()); binyid++){
+    for( int binyid = 1; binyid<=(HUnits->GetYaxis()->GetNbins()); binyid++){
       for( int binxid = 1; binxid<=(HUnits->GetXaxis()->GetNbins()); binxid++ ){ 
 	   
-	      int HU = (int)HUnits->GetBinContent(binxid,binyid,binzid); 	  
-	      x = (HUnits->GetXaxis()->GetBinCenter(binxid))-6.0; //translate midpoint to origin (=simulation origin)
-	      y = (HUnits->GetYaxis()->GetBinCenter(binyid))-6.0;
+        int HU = (int)HUnits->GetBinContent(binxid,binyid,binzid); //This Hounsfield Unit (HU) will tell us if we are in air or not 	  
+        x = (HUnits->GetXaxis()->GetBinCenter(binxid))-6.0; //translate midpoint to origin (=simulation origin)
+        y = (HUnits->GetYaxis()->GetBinCenter(binyid))-6.0;
         z = (HUnits->GetZaxis()->GetBinCenter(binzid))+86.25; //Move it down one Zbin! It is off by one pixel in z direction 86.25mm -> 85.0mm
         
         xRot = (x*cos(double(headAngle)*radConv) - (y*sin(double(headAngle)*radConv))); //Rotate around z-axis
@@ -138,7 +138,7 @@ int main(int argc, char *argv[]){
   }
   phantomFile->Close(); //This deletes any objects associated with the phantom file from memory  
 //--------------------------------------  
-  
+  //Collect the data from the createTree root file
   t->SetBranchAddress("TPSx0",&Point.TPSx0);
   t->SetBranchAddress("TPSy0",&Point.TPSy0);
   t->SetBranchAddress("TPSz0",&Point.TPSz0);
@@ -158,7 +158,7 @@ int main(int argc, char *argv[]){
   t->SetBranchAddress("WEPLreal",&Point.weplReal);
   t->SetBranchAddress("scatter_out",&Point.scatter_out);
   
-  //To be updated after hull
+  //Variables to be updated after hull
   tt->Branch("x12_h",&Point.TPSx0);
   tt->Branch("y12_h",&Point.TPSy0);
   tt->Branch("z12_h",&Point.TPSz0);
@@ -180,8 +180,8 @@ int main(int argc, char *argv[]){
   
   int NEntries = t->GetEntries(); 
  
-  cout << "Begin filter initialization" << endl;   //We filter on information from protons exiting phantom! (exit-enter)
-
+  cout << "Begin filter initialization" << endl;   //We filter on information from protons exiting phantom! difference between exit and enter (exit minus enter)
+  //Create 3D histograms where the first two dimensions are the 2D image plane (reconstruction area) and the third dimension will be filled with the difference between exit and enter angle, and wepl
   TH3F* angularDistX = new TH3F("angularDistX", "Angular distribution in X direction", NbinsX, Xmin, Xmax, NbinsZ, Zmin, Zmax, 200,-0.2,0.2);
   TH3F* angularDistZ = new TH3F("angularDistZ", "Angular distribution in Z direction", NbinsX, Xmin, Xmax, NbinsZ, Zmin, Zmax, 200,-0.2,0.2);
   TH3F* WEPLDist = new TH3F("WEPLDist", "WEPL distribution", NbinsX, Xmin, Xmax, NbinsZ, Zmin, Zmax, 125,-50,200); //only wepl values up to 200 mm is expected
@@ -191,59 +191,62 @@ int main(int argc, char *argv[]){
   float s_pos;
   
   cout<<NEntries<<endl;
+	
   for(int i=0;i<NEntries;i++){//Loop over all protons to fill distributions
+	  
     t->GetEntry(i);
     if(i%100000 == 0) cout<<i<<endl;
     
-    Point.x21 = Point.x21 - (Point.p2x*d_phantom);
+    Point.x21 = Point.x21 - (Point.p2x*d_phantom); //Project closer to the phantom to make hull finding easier
     Point.z21 = Point.z21 - (Point.p2z*d_phantom);
     Point.y21 = Point.y21 - d_phantom;
    
-    s_pos = 0.3;//cm beam sigma at surface of phantom (known from simulations)
+    s_pos = 0.3;//cm beam sigma at surface of phantom (known from simulations!)
     
-		float step = 0.1; // mm Step in that you project the vectors onto the hull. The finer the step, the better the hull algorithm, but the more time consuming
-		TVector3 X2_hull = TVector3(Point.x21, Point.z21, Point.y21); //End-point (for that particular proton)
-		TVector3 dirX2 = TVector3(Point.p2x, Point.p2z, Point.p2y); //final direction
-		int counter1 = 0;  //Counter is a sefety measure to prevent infinite loops 
-		int HUbin = HUMap->FindBin(X2_hull.x(), X2_hull.y(), X2_hull.z()); // assuming both HU and measured positions are in the same coordinates
-		int HU = HUMap->GetBinContent(HUbin);
-		if(HU == 0){HU=(-998);}
-		while(HU==(-998) && counter1 < 2000){ // project as long as the HU value is air. Counter is a sefety measure to prevent infinite loops 
-	      X2_hull = X2_hull - step*dirX2; // Project in straight line along initial direction NOTE THE MINUS!
-	      HUbin = HUMap->FindBin(X2_hull.x(), X2_hull.y(), X2_hull.z());
-	      HU = HUMap->GetBinContent(HUbin);
-	      if(HU == 0 || HU==2310){HU=(-998);}
-	      counter1++;
-		}
+    //First step of the hull algorithm, we start at the rear because we know the proton position and direction from trackers
+    float step = 0.1; // mm Step in that you project the vectors onto the hull. The finer the step, the better the hull algorithm, but the more time consuming
+    TVector3 X2_hull = TVector3(Point.x21, Point.z21, Point.y21); // Start point for hull (for that particular proton)
+    TVector3 dirX2 = TVector3(Point.p2x, Point.p2z, Point.p2y); //proton direction to move 
+    int counter1 = 0;  //Counter is a sefety measure to prevent infinite loops 
+    int HUbin = HUMap->FindBin(X2_hull.x(), X2_hull.y(), X2_hull.z()); //This is why the huge 3D histogram of the head phantom and its rotation is needed, to make sure both HU and measured positions are in the same coordinate system
+    int HU = HUMap->GetBinContent(HUbin); //check what material we are in
+    if(HU == 0){HU=(-998);} //If the bin is empty, we are in air (HU=-998)
+    while(HU==(-998) && counter1 < 2000){ // project as long as the proton (HU value) is in air. 
+      X2_hull = X2_hull - step*dirX2; // Project in straight line along direction NOTE THE MINUS! Because we are moving backwards from rear tracker to phantom
+      HUbin = HUMap->FindBin(X2_hull.x(), X2_hull.y(), X2_hull.z());
+      HU = HUMap->GetBinContent(HUbin);
+      if(HU == 0 || HU==2310){HU=(-998);} //There is a strange artifact from the dicom file that causes a few thousand protons to hit bone outside the phantom, this does not happen naturally since we don't have bone outside our skin, so I force this artifact to beceome air
+      counter1++;
+    }
 		 
-	  if(X2_hull.z()>(-50.0)){ //hit the hull from the back
+    if(X2_hull.z()>(-50.0)){ //we have hit the hull from the back! Update proton positions to the last position before hitting the phantom
       Point.x21 = X2_hull.x();
       Point.z21 = X2_hull.y();
       Point.y21 = X2_hull.z();
     } 
-	
-	  struct inPos posIn = ComputeOptIn(&Point, s_pos); //optimized starting point at hull depth if found, otherwise uses the projected tracker position
-    TVector3 X0_hull = TVector3(posIn.X_opt, posIn.Z_opt, Point.TPSy0);
+
+    //Since we have found the hull on the rear, we can more accurately calculate the most likely entrance point (using Krah.et.al) and find the hull from the front 
+    struct inPos posIn = ComputeOptIn(&Point, s_pos); //optimized starting point at hull depth if found, otherwise uses the projected tracker position
+    TVector3 X0_hull = TVector3(posIn.X_opt, posIn.Z_opt, Point.TPSy0); //Optimized positions that function as the start for the hull
     TVector3 dirX0 = TVector3(posIn.theta_X_opt, posIn.theta_Z_opt, Point.TPSpy0);
-	  int counter2 = 0; //resetting counter
-	  HUbin = HUMap->FindBin(X0_hull.x(), X0_hull.y(), X0_hull.z()); 
-	  HU = HUMap->GetBinContent(HUbin);
-	  if(HU == 0)HU=(-998);
-		while(HU==(-998) && counter2 < 2000){ // project as long as the HU value in the protons way is smaller than lung material. Counter is a sefety measure to prevent infinite loops 
-	      X0_hull = X0_hull + step*dirX0; // Project in straight line along initial direction
-	      HUbin = HUMap->FindBin(X0_hull.x(), X0_hull.y(), X0_hull.z());
-		    HU = HUMap->GetBinContent(HUbin);
-	      if(HU == 0 || HU==2310){HU=(-998);}
-	      counter2++;
-		}
+    int counter2 = 0; //resetting counter
+    HUbin = HUMap->FindBin(X0_hull.x(), X0_hull.y(), X0_hull.z()); 
+    HU = HUMap->GetBinContent(HUbin);
+    if(HU == 0)HU=(-998);
+      while(HU==(-998) && counter2 < 2000){ // project as long as the HU value in the protons way is smaller than lung material. Counter is a sefety measure to prevent infinite loops 
+      X0_hull = X0_hull + step*dirX0; // Project in straight line along initial direction
+      HUbin = HUMap->FindBin(X0_hull.x(), X0_hull.y(), X0_hull.z());
+      HU = HUMap->GetBinContent(HUbin);
+      if(HU == 0 || HU==2310){HU=(-998);}
+      counter2++;
+    }
 	
- 	  if(X0_hull.z()<50.0 && X2_hull.z()>(-50.0)){//Both sides have hit the pahantom	
-		
-	    Point.TPSx0 = X0_hull.x(); 
+    if(X0_hull.z()<50.0 && X2_hull.z()>(-50.0)){//Both sides have hit the pahantom! Update all proton positions to the hull/contour of the phantom		
+      Point.TPSx0 = X0_hull.x(); 
       Point.TPSz0 = X0_hull.y(); 
       Point.TPSy0 = X0_hull.z(); 
 
-	    Point.TPSpx0 = posIn.theta_X_opt; 
+      Point.TPSpx0 = posIn.theta_X_opt; 
       Point.TPSpz0 = posIn.theta_Z_opt; 
                 
       Point.x21 = X2_hull.x();
@@ -251,16 +254,17 @@ int main(int argc, char *argv[]){
       Point.y21 = X2_hull.z();
        
       tt->Fill();
-       
+      
+      //Here we add to the angular distribution to filter on (the third dimension of the 3D histogram) 
       distAngleX = Point.p2x - Point.TPSpx0;
       angularDistX->Fill(Point.x21, Point.z21, distAngleX);    
       distAngleZ = Point.p2z - Point.TPSpz0;
       angularDistZ->Fill(Point.x21, Point.z21, distAngleZ);
     }
     
-    else if(X0_hull.z()>50.0 && X2_hull.z()<(-50.0)){//Completely missed the phantom from both sides
+    else if(X0_hull.z()>50.0 && X2_hull.z()<(-50.0)){//Completely missed the phantom from both sides (Ends up as a straight line...)
 		
-	    Point.TPSx0 = posIn.X_opt; 
+      Point.TPSx0 = posIn.X_opt; 
       Point.TPSz0 = posIn.Z_opt;
        
       Point.TPSpx0 = posIn.theta_X_opt; 
@@ -268,17 +272,17 @@ int main(int argc, char *argv[]){
        
       tt->Fill();
        
+      //Here we add to the angular distribution to filter	    
       distAngleX = Point.p2x - Point.TPSpx0;
       angularDistX->Fill(Point.x21, Point.z21, distAngleX);    
       distAngleZ = Point.p2z - Point.TPSpz0;
       angularDistZ->Fill(Point.x21, Point.z21, distAngleZ);
-	  }
+    }
   }
   
-  //Filtering on angle all done and we have the best possible positions 
-  //Now we have a new file where positions are on the hull and we have prepared for the filtering
+  //Filter distribution of angle all done and we have the best possible positions on the hull for all protons! We have a new file where positions are on the hull and we have prepared for the filtering
   tt->Write("", TObject::kOverwrite);
-  
+  //read the hull positions into memory again to build the proper filter distribution (by later projecting the third dimension from the 3D histograms)
   tt->SetBranchAddress("x12_h",&Point.x12_h);
   tt->SetBranchAddress("y12_h",&Point.y12_h);
   tt->SetBranchAddress("z12_h",&Point.z12_h);
@@ -302,6 +306,7 @@ int main(int argc, char *argv[]){
   
   cout<<NEntries<<" new tree"<<endl;
  
+  //These are the filter distribution we need to make so that our reconstruction knows what to filter out. They will take the shape of 2D images where each "pixel" (bin) has its own mean and sigma based on the distribution found in the 3D histogram!
   TH2F* angleMeanX = new TH2F("angleMeanX", "Angular distribution in X direction", NbinsX, Xmin, Xmax, NbinsZ, Zmin, Zmax);
   TH2F* angleMeanZ = new TH2F("angleMeanZ", "Angular distribution in Z direction", NbinsX, Xmin, Xmax, NbinsZ, Zmin, Zmax);
   TH2F* WEPLMean = new TH2F("WEPLMean", "WEPL distribution", NbinsX, Xmin, Xmax, NbinsZ, Zmin, Zmax);
@@ -309,29 +314,28 @@ int main(int argc, char *argv[]){
   TH2F* angleSigX = new TH2F("angleSigX", "Angular sigma distribution in X direction", NbinsX, Xmin, Xmax, NbinsZ, Zmin, Zmax);
   TH2F* angleSigZ = new TH2F("angleSigZ", "Angular sigma distribution in Z direction", NbinsX, Xmin, Xmax, NbinsZ, Zmin, Zmax);
   TH2F* WEPLSig = new TH2F("WEPLSig", "WEPL sigma distribution", NbinsX, Xmin, Xmax, NbinsZ, Zmin, Zmax);
-  TH2F* WEPLfwhm = new TH2F("WEPLfwhm", "WEPL fwhm distribution", NbinsX, Xmin, Xmax, NbinsZ, Zmin, Zmax);
-
+  TH2F* WEPLfwhm = new TH2F("WEPLfwhm", "WEPL fwhm distribution", NbinsX, Xmin, Xmax, NbinsZ, Zmin, Zmax); //This is an alternative to sigma (fwhm~=2.3 sigma)
 	
   for( int binxid = 1; binxid<=(WEPLDist->GetXaxis()->GetNbins()); binxid++ ){  if(binxid%100 == 0) cout<<binxid<<endl; //For visualizing progress
     for( int binzid = 1; binzid<=(WEPLDist->GetYaxis()->GetNbins()); binzid++){
 		
       float x = WEPLDist->GetXaxis()->GetBinCenter(binxid); //The "local" bin's center is requested so that the pixel from the 3D histogram can be translated to 2D
-	    float z = WEPLDist->GetYaxis()->GetBinCenter(binzid);
+      float z = WEPLDist->GetYaxis()->GetBinCenter(binzid);
 		  
-	    //Begin filling up the 2D histograms where each bin is a double image pixel and filled/weighted by the mean or mean-error
+      //Begin filling up the 2D histograms where each bin is a double image pixel and filled/weighted by the mean or mean-error
 		
-	    meanAngleX = angularDistX->ProjectionZ("pz1",binxid,binxid,binzid,binzid)->GetMean();
-	    angleMeanX->Fill(x,z,meanAngleX);
+      meanAngleX = angularDistX->ProjectionZ("pz1",binxid,binxid,binzid,binzid)->GetMean();
+      angleMeanX->Fill(x,z,meanAngleX);
 		
-	    sigAngleX = angularDistX->ProjectionZ("pz2",binxid,binxid,binzid,binzid)->GetStdDev();
-	    angleSigX->Fill(x,z,sigAngleX);
+      sigAngleX = angularDistX->ProjectionZ("pz2",binxid,binxid,binzid,binzid)->GetStdDev();
+      angleSigX->Fill(x,z,sigAngleX);
 		
-	    meanAngleZ = angularDistZ->ProjectionZ("pz3",binxid,binxid,binzid,binzid)->GetMean();
-	    angleMeanZ->Fill(x,z,meanAngleZ);
+      meanAngleZ = angularDistZ->ProjectionZ("pz3",binxid,binxid,binzid,binzid)->GetMean();
+      angleMeanZ->Fill(x,z,meanAngleZ);
 		
-	    sigAngleZ = angularDistZ->ProjectionZ("pz4",binxid,binxid,binzid,binzid)->GetStdDev();
-	    angleSigZ->Fill(x,z,sigAngleZ);		
-	  }
+      sigAngleZ = angularDistZ->ProjectionZ("pz4",binxid,binxid,binzid,binzid)->GetStdDev();
+      angleSigZ->Fill(x,z,sigAngleZ);		
+    }
   }
  
   angleMeanX->Write("MeanAx",TObject::kOverwrite);
@@ -339,7 +343,7 @@ int main(int argc, char *argv[]){
   angleMeanZ->Write("MeanAz",TObject::kOverwrite);
   angleSigZ->Write("SigAz",TObject::kOverwrite);
 
-  //Filter the wepl!
+  //Now filter the wepl more accurately by using the angle filter and 2.5 sigma! This might be redundant, but: better WEPL = better image...
   TH1D* WEPLdistf;
   for(int i=0;i<NEntries;i++){//Loop over all protons in the new file/tree to fill distributions
     tt->GetEntry(i); 
@@ -358,54 +362,54 @@ int main(int argc, char *argv[]){
   }
   
   for( int binxid = 1; binxid<=(WEPLDist->GetXaxis()->GetNbins()); binxid++ ){  if(binxid%100 == 0) cout<<binxid<<endl; //For visualizing progress
-	  for( int binzid = 1; binzid<=(WEPLDist->GetYaxis()->GetNbins()); binzid++){
+    for( int binzid = 1; binzid<=(WEPLDist->GetYaxis()->GetNbins()); binzid++){
 		
-		  double x = WEPLDist->GetXaxis()->GetBinCenter(binxid); //The "local" bin's center is requested so that the pixel from the 3D histogram can be translated to 2D
-		  double z = WEPLDist->GetYaxis()->GetBinCenter(binzid);
+      double x = WEPLDist->GetXaxis()->GetBinCenter(binxid); //The "local" bin's center is requested so that the pixel from the 3D histogram can be translated to 2D
+      double z = WEPLDist->GetYaxis()->GetBinCenter(binzid);
 		  
-		  //Finding the maximum WEPL peak inside a bin/pixel	  
-		  TH1D* WEPLdistPix = WEPLDist->ProjectionZ("pz15",binxid,binxid,binzid,binzid);
-		  int binmax = WEPLdistPix->GetMaximumBin(); 
-		  int bin = binmax;
-	    float mode = WEPLdistPix->GetXaxis()->GetBinCenter(binmax);
-	    float maxValue = WEPLdistPix->GetBinContent(binmax); 
-	    float binValue = WEPLdistPix->GetBinContent(bin);
-	    int nbin = 0; //prevent infinite loop
+      //Finding the maximum WEPL peak inside a bin/pixel, this approach is a bit special and stems from the realistic wepl values gotten from Helge... But it works and is interesting, but feel free to try different approaches!	  
+      //I find the maximum value (essentially the mean/mode of the wepl distribution inside the pixel/bin)
+      TH1D* WEPLdistPix = WEPLDist->ProjectionZ("pz15",binxid,binxid,binzid,binzid);
+      int binmax = WEPLdistPix->GetMaximumBin(); 
+      int bin = binmax;
+      float mode = WEPLdistPix->GetXaxis()->GetBinCenter(binmax);
+      float maxValue = WEPLdistPix->GetBinContent(binmax); 
+      float binValue = WEPLdistPix->GetBinContent(bin);
+      int nbin = 0; //prevent infinite loop	      
+      while(binValue>=(maxValue/2.0) && nbin<11){ //I find the fwhm to better identify the wepl distribution, mind the nbin, this is an empirical value given my choice of bin size! Easy to change and picture how it works (11*0.75mm=8.25mm), if your phantom is larger and you expect to see more than 8.25mm difference in wepl spread 
+        bin=bin+1;
+        binValue = WEPLdistPix->GetBinContent(bin);
+        nbin++;
+      }
+      int topBin = bin; 
+      float modeTop = WEPLdistPix->GetXaxis()->GetBinCenter(topBin); 
+      nbin=0;
+      bin=binmax;
+      binValue = WEPLdistPix->GetBinContent(bin);
+      while(binValue>=(maxValue/2.0) && nbin<11){
+        bin=bin-1;
+	binValue = WEPLdistPix->GetBinContent(bin);
+        nbin++;
+      }
+      int botBin = bin; 
+      float modeBot = WEPLdistPix->GetXaxis()->GetBinCenter(botBin);
 	      
-	    while(binValue>=(maxValue/2.0) && nbin<11){ 
-			  bin=bin+1;
-		    binValue = WEPLdistPix->GetBinContent(bin);
-		    nbin++;
-		  }
-		  int topBin = bin; 
-	    float modeTop = WEPLdistPix->GetXaxis()->GetBinCenter(topBin); 
-	    nbin=0;
-	    bin=binmax;
-	    binValue = WEPLdistPix->GetBinContent(bin);
-	    while(binValue>=(maxValue/2.0) && nbin<11){
-			  bin=bin-1;
-		    binValue = WEPLdistPix->GetBinContent(bin);
-		    nbin++;
-		  }
-		  int botBin = bin; 
-	    float modeBot = WEPLdistPix->GetXaxis()->GetBinCenter(botBin);
+      float fwhm = modeTop - modeBot; //manually found the fwhm, this functions quite well, but you can probably find an alternative appraoch...
 	      
-	    float fwhm = modeTop - modeBot;
+      WEPLdistf = new TH1D("weplDistf", "distribution of wepl", 50, (mode-(fwhm)), (mode+(fwhm)));
+      for( int binpixid = 1; binpixid<=(WEPLdistPix->GetXaxis()->GetNbins()); binpixid++ ){ 
+        float WEPLvalue = WEPLdistPix->GetBinContent(binpixid);
+	float xpos = WEPLdistPix->GetXaxis()->GetBinCenter(binpixid);
+        WEPLdistf->Fill(xpos,WEPLvalue);
+      }
 	      
-	    WEPLdistf = new TH1D("weplDistf", "distribution of wepl", 50, (mode-(fwhm)), (mode+(fwhm)));
-	    for( int binpixid = 1; binpixid<=(WEPLdistPix->GetXaxis()->GetNbins()); binpixid++ ){ 
-			  float WEPLvalue = WEPLdistPix->GetBinContent(binpixid);
-			  float xpos = WEPLdistPix->GetXaxis()->GetBinCenter(binpixid);
-			  WEPLdistf->Fill(xpos,WEPLvalue);
-		  }
-	      
-	    float mean = WEPLdistf->GetMean();
-		  WEPLMean->Fill(x,z,mean);
-		  float sig = WEPLdistf->GetStdDev();
-	   	  WEPLSig->Fill(x,z,sig);
-		  WEPLfwhm->Fill(x,z,fwhm);
-	   
-	   	delete WEPLdistf;
+      float mean = WEPLdistf->GetMean();
+      WEPLMean->Fill(x,z,mean);
+      float sig = WEPLdistf->GetStdDev();
+      WEPLSig->Fill(x,z,sig);
+      WEPLfwhm->Fill(x,z,fwhm);
+   
+      delete WEPLdistf;
     }
   }
    
@@ -425,12 +429,12 @@ int main(int argc, char *argv[]){
 ////////////////////////////////////////////
 struct inPos ComputeOptIn(Proton *Point, float s_pos){
 	
-	//---------------------------------------------------------------
-    //transform all mm into cm 
-    //---------------------------------------------------------------
-    Point->TPSx0 /=10.; Point->TPSy0 /=10.; Point->TPSz0 /=10.;
-    Point->x21	/=10.; Point->y21 /=10.; Point->z21 /=10.; 
-    //------------------------------------------------------------  
+  //---------------------------------------------------------------
+  //transform all mm into cm 
+  //---------------------------------------------------------------
+  Point->TPSx0 /=10.; Point->TPSy0 /=10.; Point->TPSz0 /=10.;
+  Point->x21	/=10.; Point->y21 /=10.; Point->z21 /=10.; 
+  //------------------------------------------------------------  
 	
   TVector3 m0(Point->TPSx0, Point->TPSy0, Point->TPSz0);
   TVector3 p0(Point->TPSpx0, Point->TPSpy0, Point->TPSpz0);
@@ -438,312 +442,311 @@ struct inPos ComputeOptIn(Proton *Point, float s_pos){
   TVector3 m1(Point->x21, Point->y21, Point->z21);
   TVector3 p1(Point->p2x, Point->p2y, Point->p2z);
    
-        //Initialization of the MLP
-    float X_mlp,Z_mlp, theta_X_mlp,theta_Z_mlp, X_mlp_sigma,Z_mlp_sigma;
+  //Initialization of the MLP
+  float X_mlp,Z_mlp, theta_X_mlp,theta_Z_mlp, X_mlp_sigma,Z_mlp_sigma;
     
-    //Iterator for the matrix operations (needed later)
-    int a;
+  //Iterator for the matrix operations (needed later)
+  int a;
     
-    //Matrices    
-    double T_beam[4];
-      T_beam[0] = 1;
-      T_beam[1] = 0;
-      T_beam[2] = 1/d_source;
-      T_beam[3] = 1;  
-    double T_beam_transpose[4];
-      T_beam_transpose[0] = 1;
-      T_beam_transpose[1] = 1/d_source;
-      T_beam_transpose[2] = 0;
-      T_beam_transpose[3] = 1;
+  //Matrices    
+  double T_beam[4];
+    T_beam[0] = 1;
+    T_beam[1] = 0;
+    T_beam[2] = 1/d_source;
+    T_beam[3] = 1;  
+  double T_beam_transpose[4];
+    T_beam_transpose[0] = 1;
+    T_beam_transpose[1] = 1/d_source;
+    T_beam_transpose[2] = 0;
+    T_beam_transpose[3] = 1;
     
-    double T_out[4];
-      T_out[0] = 1; //eq. 26 in Krah
-      T_out[1] = 0; 
-      T_out[2] = -1/(d_T);
-      T_out[3] = 1/(d_T);
-    double T_out_transpose[4];
-      T_out_transpose[0] = T_out[0];
-      T_out_transpose[1] = T_out[2];
-      T_out_transpose[2] = T_out[1];
-      T_out_transpose[3] = T_out[3];
+  double T_out[4];
+    T_out[0] = 1; //eq. 26 in Krah
+    T_out[1] = 0; 
+    T_out[2] = -1/(d_T);
+    T_out[3] = 1/(d_T);
+  double T_out_transpose[4];
+    T_out_transpose[0] = T_out[0];
+    T_out_transpose[1] = T_out[2];
+    T_out_transpose[2] = T_out[1];
+    T_out_transpose[3] = T_out[3];
       
-    double beam_uncert[4]; //sigma spot-size
-      beam_uncert[0] = s_pos*s_pos;
-      beam_uncert[1] = 0;
-      beam_uncert[2] = 0;
-      beam_uncert[3] = 0;
+  double beam_uncert[4]; //sigma spot-size
+    beam_uncert[0] = s_pos*s_pos;
+    beam_uncert[1] = 0;
+    beam_uncert[2] = 0;
+    beam_uncert[3] = 0;
     
-    double beam_1[4]; //T_beam*beam_uncert1
-      beam_1[0] = ((T_beam[0] * beam_uncert[0]) + (T_beam[1]*beam_uncert[2]));
-      beam_1[1] = ((T_beam[0] * beam_uncert[1]) + (T_beam[1]*beam_uncert[3]));
-      beam_1[2] = ((T_beam[2] * beam_uncert[0]) + (T_beam[3]*beam_uncert[2]));
-      beam_1[3] = ((T_beam[2] * beam_uncert[1]) + (T_beam[3]*beam_uncert[3]));  
+  double beam_1[4]; //T_beam*beam_uncert1
+    beam_1[0] = ((T_beam[0] * beam_uncert[0]) + (T_beam[1]*beam_uncert[2]));
+    beam_1[1] = ((T_beam[0] * beam_uncert[1]) + (T_beam[1]*beam_uncert[3]));
+    beam_1[2] = ((T_beam[2] * beam_uncert[0]) + (T_beam[3]*beam_uncert[2]));
+    beam_1[3] = ((T_beam[2] * beam_uncert[1]) + (T_beam[3]*beam_uncert[3]));  
 
-    double Sigma_in[4]={0}; //Single-sided: eq.29 in Krah, now eq.28
-      Sigma_in[0] = ( (beam_1[0] * T_beam_transpose[0]) + (beam_1[1] * T_beam_transpose[2]) );
-      Sigma_in[1] = ( (beam_1[0] * T_beam_transpose[1]) + (beam_1[1] * T_beam_transpose[3]) );
-      Sigma_in[2] = ( (beam_1[2] * T_beam_transpose[0]) + (beam_1[3] * T_beam_transpose[2]) );
-      Sigma_in[3] = ( ((beam_1[2] * T_beam_transpose[1]) + (beam_1[3] * T_beam_transpose[3]) )) + pow(s_angle, 2); 
+  double Sigma_in[4]={0}; //Single-sided: eq.29 in Krah, now eq.28
+    Sigma_in[0] = ( (beam_1[0] * T_beam_transpose[0]) + (beam_1[1] * T_beam_transpose[2]) );
+    Sigma_in[1] = ( (beam_1[0] * T_beam_transpose[1]) + (beam_1[1] * T_beam_transpose[3]) );
+    Sigma_in[2] = ( (beam_1[2] * T_beam_transpose[0]) + (beam_1[3] * T_beam_transpose[2]) );
+    Sigma_in[3] = ( ((beam_1[2] * T_beam_transpose[1]) + (beam_1[3] * T_beam_transpose[3]) )) + pow(s_angle, 2); 
     
-    double Sigma_out[4];
-      Sigma_out[0] = pow(s_pos_out, 2) * ( (T_out[0] * T_out_transpose[0]) + (T_out[1]*T_out_transpose[2]) );
-      Sigma_out[1] = pow(s_pos_out, 2) * ( (T_out[0] * T_out_transpose[1]) + (T_out[1]*T_out_transpose[3]) );
-      Sigma_out[2] = pow(s_pos_out, 2) * ( (T_out[2] * T_out_transpose[0]) + (T_out[3]*T_out_transpose[2]) );
-      Sigma_out[3] = (pow(s_pos_out, 2) * ( (T_out[2] * T_out_transpose[1]) + (T_out[3]*T_out_transpose[3]) )) + pow(Point->scatter_out, 2);  
+  double Sigma_out[4];
+    Sigma_out[0] = pow(s_pos_out, 2) * ( (T_out[0] * T_out_transpose[0]) + (T_out[1]*T_out_transpose[2]) );
+    Sigma_out[1] = pow(s_pos_out, 2) * ( (T_out[0] * T_out_transpose[1]) + (T_out[1]*T_out_transpose[3]) );
+    Sigma_out[2] = pow(s_pos_out, 2) * ( (T_out[2] * T_out_transpose[0]) + (T_out[3]*T_out_transpose[2]) );
+    Sigma_out[3] = (pow(s_pos_out, 2) * ( (T_out[2] * T_out_transpose[1]) + (T_out[3]*T_out_transpose[3]) )) + pow(Point->scatter_out, 2);  
     
-    double S_in[4]; // eq. 14 in Krah
-      S_in[0] = 1;
-      S_in[1] = d_entry;
-      S_in[2] = 0;
-      S_in[3] = 1;
-    double S_in_transpose[4];
-      S_in_transpose[0] = S_in[0];
-      S_in_transpose[1] = S_in[2];
-      S_in_transpose[2] = S_in[1];
-      S_in_transpose[3] = S_in[3];
+  double S_in[4]; // eq. 14 in Krah
+    S_in[0] = 1;
+    S_in[1] = d_entry;
+    S_in[2] = 0;
+    S_in[3] = 1;
+  double S_in_transpose[4];
+    S_in_transpose[0] = S_in[0];
+    S_in_transpose[1] = S_in[2];
+    S_in_transpose[2] = S_in[1];
+    S_in_transpose[3] = S_in[3];
       
-    double S_out_inverse[4]; //inverse of a two by two matrix ((a b),(c d)): 1/determinant ((d,-b),(-c,a))
-      S_out_inverse[0] = 1;
-      S_out_inverse[1] = -d_exit;
-      S_out_inverse[2] = 0;
-      S_out_inverse[3] = 1;
-    double S_out_inverse_transpose[4];
-      S_out_inverse_transpose[0] = 1;
-      S_out_inverse_transpose[1] = 0;
-      S_out_inverse_transpose[2] = -d_exit;
-      S_out_inverse_transpose[3] = 1;
+  double S_out_inverse[4]; //inverse of a two by two matrix ((a b),(c d)): 1/determinant ((d,-b),(-c,a))
+    S_out_inverse[0] = 1;
+    S_out_inverse[1] = -d_exit;
+    S_out_inverse[2] = 0;
+    S_out_inverse[3] = 1;
+  double S_out_inverse_transpose[4];
+    S_out_inverse_transpose[0] = 1;
+    S_out_inverse_transpose[1] = 0;
+    S_out_inverse_transpose[2] = -d_exit;
+    S_out_inverse_transpose[3] = 1;
         
-      //Can calculate parts of the C1 and C2 terms for later use  
-    double SS_in[4]; //S_in*Sigma_in
-      SS_in[0] = (S_in[0] * Sigma_in[0]) + (S_in[1] * Sigma_in[2]);
-      SS_in[1] = (S_in[0] * Sigma_in[1]) + (S_in[1] * Sigma_in[3]);
-      SS_in[2] = (S_in[2] * Sigma_in[0]) + (S_in[3] * Sigma_in[2]);
-      SS_in[3] = (S_in[2] * Sigma_in[1]) + (S_in[3] * Sigma_in[3]);
-    double SSS_in[4]; //S_in*Sigma_in*S_in_transpose (to be multiplied with R_0 and R_0_transpose later)
-      SSS_in[0] = (SS_in[0] * S_in_transpose[0]) + (SS_in[1] * S_in_transpose[2]);
-      SSS_in[1] = (SS_in[0] * S_in_transpose[1]) + (SS_in[1] * S_in_transpose[3]);
-      SSS_in[2] = (SS_in[2] * S_in_transpose[0]) + (SS_in[3] * S_in_transpose[2]);
-      SSS_in[3] = (SS_in[2] * S_in_transpose[1]) + (SS_in[3] * S_in_transpose[3]);
-
-    double SS_out[4]; //S_out_inverse*Sigma_out
-      SS_out[0] = (S_out_inverse[0] * Sigma_out[0]) + (S_out_inverse[1] * Sigma_out[2]);
-      SS_out[1] = (S_out_inverse[0] * Sigma_out[1]) + (S_out_inverse[1] * Sigma_out[3]);
-      SS_out[2] = (S_out_inverse[2] * Sigma_out[0]) + (S_out_inverse[3] * Sigma_out[2]);
-      SS_out[3] = (S_out_inverse[2] * Sigma_out[1]) + (S_out_inverse[3] * Sigma_out[3]);
-    double SSS_out[4]; //S_out_inverse*Sigma_out*S_out_inverse_transpose (to be multiplied with R_1_inverse and R_1_inverse_transpose later)
-      SSS_out[0] = (SS_out[0] * S_out_inverse_transpose[0]) + (SS_out[1] * S_out_inverse_transpose[2]);
-      SSS_out[1] = (SS_out[0] * S_out_inverse_transpose[1]) + (SS_out[1] * S_out_inverse_transpose[3]);
-      SSS_out[2] = (SS_out[2] * S_out_inverse_transpose[0]) + (SS_out[3] * S_out_inverse_transpose[2]);
-      SSS_out[3] = (SS_out[2] * S_out_inverse_transpose[1]) + (SS_out[3] * S_out_inverse_transpose[3]);    
+   //Can calculate parts of the C1 and C2 terms for later use  
+  double SS_in[4]; //S_in*Sigma_in
+    SS_in[0] = (S_in[0] * Sigma_in[0]) + (S_in[1] * Sigma_in[2]);
+    SS_in[1] = (S_in[0] * Sigma_in[1]) + (S_in[1] * Sigma_in[3]);
+    SS_in[2] = (S_in[2] * Sigma_in[0]) + (S_in[3] * Sigma_in[2]);
+    SS_in[3] = (S_in[2] * Sigma_in[1]) + (S_in[3] * Sigma_in[3]);
+  double SSS_in[4]; //S_in*Sigma_in*S_in_transpose (to be multiplied with R_0 and R_0_transpose later)
+    SSS_in[0] = (SS_in[0] * S_in_transpose[0]) + (SS_in[1] * S_in_transpose[2]);
+    SSS_in[1] = (SS_in[0] * S_in_transpose[1]) + (SS_in[1] * S_in_transpose[3]);
+    SSS_in[2] = (SS_in[2] * S_in_transpose[0]) + (SS_in[3] * S_in_transpose[2]);
+    SSS_in[3] = (SS_in[2] * S_in_transpose[1]) + (SS_in[3] * S_in_transpose[3]);
+  double SS_out[4]; //S_out_inverse*Sigma_out
+    SS_out[0] = (S_out_inverse[0] * Sigma_out[0]) + (S_out_inverse[1] * Sigma_out[2]);
+    SS_out[1] = (S_out_inverse[0] * Sigma_out[1]) + (S_out_inverse[1] * Sigma_out[3]);
+    SS_out[2] = (S_out_inverse[2] * Sigma_out[0]) + (S_out_inverse[3] * Sigma_out[2]);
+    SS_out[3] = (S_out_inverse[2] * Sigma_out[1]) + (S_out_inverse[3] * Sigma_out[3]);
+  double SSS_out[4]; //S_out_inverse*Sigma_out*S_out_inverse_transpose (to be multiplied with R_1_inverse and R_1_inverse_transpose later)
+    SSS_out[0] = (SS_out[0] * S_out_inverse_transpose[0]) + (SS_out[1] * S_out_inverse_transpose[2]);
+    SSS_out[1] = (SS_out[0] * S_out_inverse_transpose[1]) + (SS_out[1] * S_out_inverse_transpose[3]);
+    SSS_out[2] = (SS_out[2] * S_out_inverse_transpose[0]) + (SS_out[3] * S_out_inverse_transpose[2]);
+    SSS_out[3] = (SS_out[2] * S_out_inverse_transpose[1]) + (SS_out[3] * S_out_inverse_transpose[3]);    
     
-    double R_0[4]={0};
-    double R_0_transpose[4]={0};
-    double RSSS_0[4]={0};
-    double RS_0[4]={0};
-    double R_1_inverse[4]={0};
-    double R_1_inverse_transpose[4]={0};
-    double RSSS_1[4]={0};
-    double RS_1[4]={0};
-    double RS_2[4]={0};
+  double R_0[4]={0};
+  double R_0_transpose[4]={0};
+  double RSSS_0[4]={0};
+  double RS_0[4]={0};
+  double R_1_inverse[4]={0};
+  double R_1_inverse_transpose[4]={0};
+  double RSSS_1[4]={0};
+  double RS_1[4]={0};
+  double RS_2[4]={0};
     
-    double Sigma_1[4]={0};
-    double Sigma_2[4]={0};
+  double Sigma_1[4]={0};
+  double Sigma_2[4]={0};
+   
+  double y_0[2]={0};
+  double y_2[2]={0};
     
-    double y_0[2]={0};
-    double y_2[2]={0};
+  double C1_1[4]={0};
+  double C1[4]={0};
     
-    double C1_1[4]={0};
-    double C1[4]={0};
+  double C2_1[4]={0};
+  double C2_2[4]={0};
+  double C2[4]={0};
     
-    double C2_1[4]={0};
-    double C2_2[4]={0};
-    double C2[4]={0};
+  double C12[4]={0};
+  double C12_inverse[4]={0};
     
-    double C12[4]={0};
-    double C12_inverse[4]={0};
+  double first_first[4]={0};
+  double second_first[4]={0};
+  double first_second[2]={0};
+  double second_second[2]={0};
+  double first[2] = {0};
+  double second[2]={0};
     
-    double first_first[4]={0};
-    double second_first[4]={0};
-    double first_second[2]={0};
-    double second_second[2]={0};
-    double first[2] = {0};
-    double second[2]={0};
+  //Parameter initialization
+  double sy1, sy2, st1, st2, sty1, sty2;
+  double determinant_1, determinant_2, determinant_C12;
     
-    //Parameter initialization
-    double sy1, sy2, st1, st2, sty1, sty2;
-    double determinant_1, determinant_2, determinant_C12;
-    
-    //Initialize the MLP iterators
-    double step_length = (m1.y()-m0.y())/Nsteps;
-    double posy=m0.y()+step_length;
+  //Initialize the MLP iterators
+  double step_length = (m1.y()-m0.y())/Nsteps;
+  double posy=m0.y()+step_length;
                     
-        //Transvection matrices, eq.8 in Krah  
-        R_0[0] = 1;
-        R_0[1] = posy-m0.y();
-        R_0[2] = 0;
-        R_0[3] = 1;
-        R_0_transpose[0] = 1;
-        R_0_transpose[1] = 0;
-        R_0_transpose[2] = posy-m0.y();
-        R_0_transpose[3] = 1;
+  //Transvection matrices, eq.8 in Krah  
+  R_0[0] = 1;
+  R_0[1] = posy-m0.y();
+  R_0[2] = 0;
+  R_0[3] = 1;
+  R_0_transpose[0] = 1;
+  R_0_transpose[1] = 0;
+  R_0_transpose[2] = posy-m0.y();
+  R_0_transpose[3] = 1;
 
-        R_1_inverse[0] = 1;
-        R_1_inverse[1] = -(m1.y()-posy);
-        R_1_inverse[2] = 0;
-        R_1_inverse[3] = 1;
-        R_1_inverse_transpose[0] = 1; 
-        R_1_inverse_transpose[1] = 0;
-        R_1_inverse_transpose[2] = -(m1.y()-posy);
-        R_1_inverse_transpose[3] = 1;
+  R_1_inverse[0] = 1;
+  R_1_inverse[1] = -(m1.y()-posy);
+  R_1_inverse[2] = 0;
+  R_1_inverse[3] = 1;
+  R_1_inverse_transpose[0] = 1; 
+  R_1_inverse_transpose[1] = 0;
+  R_1_inverse_transpose[2] = -(m1.y()-posy);
+  R_1_inverse_transpose[3] = 1;
         
-        //need these for later:R_0*S_in, R_0*SSS_in, and R_1_inverse*SSS_out
-        RS_0[0]= (R_0[0]*S_in[0]) + (R_0[1]*S_in[2]);
-        RS_0[1]= (R_0[0]*S_in[1]) + (R_0[1]*S_in[3]);
-        RS_0[2]= (R_0[2]*S_in[0]) + (R_0[3]*S_in[2]);
-        RS_0[3]= (R_0[2]*S_in[1]) + (R_0[3]*S_in[3]);
+  //need these for later:R_0*S_in, R_0*SSS_in, and R_1_inverse*SSS_out
+  RS_0[0]= (R_0[0]*S_in[0]) + (R_0[1]*S_in[2]);
+  RS_0[1]= (R_0[0]*S_in[1]) + (R_0[1]*S_in[3]);
+  RS_0[2]= (R_0[2]*S_in[0]) + (R_0[3]*S_in[2]);
+  RS_0[3]= (R_0[2]*S_in[1]) + (R_0[3]*S_in[3]);
         
-        RSSS_0[0]= (R_0[0]*SSS_in[0]) + (R_0[1]*SSS_in[2]);
-        RSSS_0[1]= (R_0[0]*SSS_in[1]) + (R_0[1]*SSS_in[3]);
-        RSSS_0[2]= (R_0[2]*SSS_in[0]) + (R_0[3]*SSS_in[2]);
-        RSSS_0[3]= (R_0[2]*SSS_in[1]) + (R_0[3]*SSS_in[3]);
+  RSSS_0[0]= (R_0[0]*SSS_in[0]) + (R_0[1]*SSS_in[2]);
+  RSSS_0[1]= (R_0[0]*SSS_in[1]) + (R_0[1]*SSS_in[3]);
+  RSSS_0[2]= (R_0[2]*SSS_in[0]) + (R_0[3]*SSS_in[2]);
+  RSSS_0[3]= (R_0[2]*SSS_in[1]) + (R_0[3]*SSS_in[3]);
         
-        RS_1[0]= (R_1_inverse[0]*S_out_inverse[0]) + (R_1_inverse[1]*S_out_inverse[2]);
-        RS_1[1]= (R_1_inverse[0]*S_out_inverse[1]) + (R_1_inverse[1]*S_out_inverse[3]);
-        RS_1[2]= (R_1_inverse[2]*S_out_inverse[0]) + (R_1_inverse[3]*S_out_inverse[2]);
-        RS_1[3]= (R_1_inverse[2]*S_out_inverse[1]) + (R_1_inverse[3]*S_out_inverse[3]);
+  RS_1[0]= (R_1_inverse[0]*S_out_inverse[0]) + (R_1_inverse[1]*S_out_inverse[2]);
+  RS_1[1]= (R_1_inverse[0]*S_out_inverse[1]) + (R_1_inverse[1]*S_out_inverse[3]);
+  RS_1[2]= (R_1_inverse[2]*S_out_inverse[0]) + (R_1_inverse[3]*S_out_inverse[2]);
+  RS_1[3]= (R_1_inverse[2]*S_out_inverse[1]) + (R_1_inverse[3]*S_out_inverse[3]);
         
-        RSSS_1[0]= (R_1_inverse[0]*SSS_out[0]) + (R_1_inverse[1]*SSS_out[2]);
-        RSSS_1[1]= (R_1_inverse[0]*SSS_out[1]) + (R_1_inverse[1]*SSS_out[3]);
-        RSSS_1[2]= (R_1_inverse[2]*SSS_out[0]) + (R_1_inverse[3]*SSS_out[2]);
-        RSSS_1[3]= (R_1_inverse[2]*SSS_out[1]) + (R_1_inverse[3]*SSS_out[3]);
+  RSSS_1[0]= (R_1_inverse[0]*SSS_out[0]) + (R_1_inverse[1]*SSS_out[2]);
+  RSSS_1[1]= (R_1_inverse[0]*SSS_out[1]) + (R_1_inverse[1]*SSS_out[3]);
+  RSSS_1[2]= (R_1_inverse[2]*SSS_out[0]) + (R_1_inverse[3]*SSS_out[2]);
+  RSSS_1[3]= (R_1_inverse[2]*SSS_out[1]) + (R_1_inverse[3]*SSS_out[3]);
                             
-        // First do everything not depending on the direction of interest (either X_mlp or Z_mlp)
-        //scattering sigma matrices
-        sy1 = Sigmay1(posy-m0.y());
-        st1 = Sigmat1(posy-m0.y());
-        sty1 = Sigmaty1(posy-m0.y());
+  // First do everything not depending on the direction of interest (either X_mlp or Z_mlp)
+  //scattering sigma matrices
+  sy1 = Sigmay1(posy-m0.y());
+  st1 = Sigmat1(posy-m0.y());
+  sty1 = Sigmaty1(posy-m0.y());
             
-        sy2 = Sigmay2(m1.y()-m0.y(),posy-m0.y());
-        sty2 = Sigmaty2(m1.y()-m0.y(),posy-m0.y());
-        st2 = Sigmat2(m1.y()-m0.y(),posy-m0.y());
+  sy2 = Sigmay2(m1.y()-m0.y(),posy-m0.y());
+  sty2 = Sigmaty2(m1.y()-m0.y(),posy-m0.y());
+  st2 = Sigmat2(m1.y()-m0.y(),posy-m0.y());
 
-        // Scattering sigma matrices
-        Sigma_1[0] = sy1;
-        Sigma_1[1] = sty1;
-        Sigma_1[2] = sty1;
-        Sigma_1[3] = st1;
+  // Scattering sigma matrices
+  Sigma_1[0] = sy1;
+  Sigma_1[1] = sty1;
+  Sigma_1[2] = sty1;
+  Sigma_1[3] = st1;
         
-        Sigma_2[0] = sy2;
-        Sigma_2[1] = sty2;
-        Sigma_2[2] = sty2;
-        Sigma_2[3] = st2;
+  Sigma_2[0] = sy2;
+  Sigma_2[1] = sty2;
+  Sigma_2[2] = sty2;
+  Sigma_2[3] = st2;
         
-        // Calculate the pre factors C1 and C2 as in Krah et al. (2018): C2*(C1+C2)^-1 R0*S0*Y0 + C1*(C1+C2)^1 R1^-1*S1^-1*Y2
-        // First start with the C1 = ((R_0*S_in*Sigma_in*S_in_transpose)*(R_0_transpose))+Sigma_1
-        C1_1[0]=(RSSS_0[0]*R_0_transpose[0])+(RSSS_0[1]*R_0_transpose[2]);
-        C1_1[1]=(RSSS_0[0]*R_0_transpose[1])+(RSSS_0[1]*R_0_transpose[3]);
-        C1_1[2]=(RSSS_0[2]*R_0_transpose[0])+(RSSS_0[3]*R_0_transpose[2]);
-        C1_1[3]=(RSSS_0[2]*R_0_transpose[1])+(RSSS_0[3]*R_0_transpose[3]);
+  // Calculate the pre factors C1 and C2 as in Krah et al. (2018): C2*(C1+C2)^-1 R0*S0*Y0 + C1*(C1+C2)^1 R1^-1*S1^-1*Y2
+  // First start with the C1 = ((R_0*S_in*Sigma_in*S_in_transpose)*(R_0_transpose))+Sigma_1
+  C1_1[0]=(RSSS_0[0]*R_0_transpose[0])+(RSSS_0[1]*R_0_transpose[2]);
+  C1_1[1]=(RSSS_0[0]*R_0_transpose[1])+(RSSS_0[1]*R_0_transpose[3]);
+  C1_1[2]=(RSSS_0[2]*R_0_transpose[0])+(RSSS_0[3]*R_0_transpose[2]);
+  C1_1[3]=(RSSS_0[2]*R_0_transpose[1])+(RSSS_0[3]*R_0_transpose[3]);
 
-        for (a=0;a<4;a++){
-            C1[a] = C1_1[a]+Sigma_1[a];
-        }
+  for (a=0;a<4;a++){
+    C1[a] = C1_1[a]+Sigma_1[a];
+  }
         
-        //Now calculate C2 = (R_1_inverse*S_out_inverse*Sigma_out*S_out_inverse_transpose*R_1_inverse_transpose) + (R_1_inverse*Sigma_2*R_1_inverse_transpose)        
-        C2_1[0] = (RSSS_1[0] * R_1_inverse_transpose[0]) + (RSSS_1[1] * R_1_inverse_transpose[2]);
-        C2_1[1] = (RSSS_1[0] * R_1_inverse_transpose[1]) + (RSSS_1[1] * R_1_inverse_transpose[3]);
-        C2_1[2] = (RSSS_1[2] * R_1_inverse_transpose[0]) + (RSSS_1[3] * R_1_inverse_transpose[2]);
-        C2_1[3] = (RSSS_1[2] * R_1_inverse_transpose[1]) + (RSSS_1[3] * R_1_inverse_transpose[3]);
+  //Now calculate C2 = (R_1_inverse*S_out_inverse*Sigma_out*S_out_inverse_transpose*R_1_inverse_transpose) + (R_1_inverse*Sigma_2*R_1_inverse_transpose)        
+  C2_1[0] = (RSSS_1[0] * R_1_inverse_transpose[0]) + (RSSS_1[1] * R_1_inverse_transpose[2]);
+  C2_1[1] = (RSSS_1[0] * R_1_inverse_transpose[1]) + (RSSS_1[1] * R_1_inverse_transpose[3]);
+  C2_1[2] = (RSSS_1[2] * R_1_inverse_transpose[0]) + (RSSS_1[3] * R_1_inverse_transpose[2]);
+  C2_1[3] = (RSSS_1[2] * R_1_inverse_transpose[1]) + (RSSS_1[3] * R_1_inverse_transpose[3]);
 
-        RS_2[0] = (R_1_inverse[0] * Sigma_2[0]) + (R_1_inverse[1] * Sigma_2[2]);
-        RS_2[1] = (R_1_inverse[0] * Sigma_2[1]) + (R_1_inverse[1] * Sigma_2[3]);
-        RS_2[2] = (R_1_inverse[2] * Sigma_2[0]) + (R_1_inverse[3] * Sigma_2[2]);
-        RS_2[3] = (R_1_inverse[2] * Sigma_2[1]) + (R_1_inverse[3] * Sigma_2[3]);
+  RS_2[0] = (R_1_inverse[0] * Sigma_2[0]) + (R_1_inverse[1] * Sigma_2[2]);
+  RS_2[1] = (R_1_inverse[0] * Sigma_2[1]) + (R_1_inverse[1] * Sigma_2[3]);
+  RS_2[2] = (R_1_inverse[2] * Sigma_2[0]) + (R_1_inverse[3] * Sigma_2[2]);
+  RS_2[3] = (R_1_inverse[2] * Sigma_2[1]) + (R_1_inverse[3] * Sigma_2[3]);
         
-        C2_2[0] = (RS_2[0] * R_1_inverse_transpose[0]) + (RS_2[1] * R_1_inverse_transpose[2]);
-        C2_2[1] = (RS_2[0] * R_1_inverse_transpose[1]) + (RS_2[1] * R_1_inverse_transpose[3]);
-        C2_2[2] = (RS_2[2] * R_1_inverse_transpose[0]) + (RS_2[3] * R_1_inverse_transpose[2]);
-        C2_2[3] = (RS_2[2] * R_1_inverse_transpose[1]) + (RS_2[3] * R_1_inverse_transpose[3]);
+  C2_2[0] = (RS_2[0] * R_1_inverse_transpose[0]) + (RS_2[1] * R_1_inverse_transpose[2]);
+  C2_2[1] = (RS_2[0] * R_1_inverse_transpose[1]) + (RS_2[1] * R_1_inverse_transpose[3]);
+  C2_2[2] = (RS_2[2] * R_1_inverse_transpose[0]) + (RS_2[3] * R_1_inverse_transpose[2]);
+  C2_2[3] = (RS_2[2] * R_1_inverse_transpose[1]) + (RS_2[3] * R_1_inverse_transpose[3]);
         
-        C2[0] = C2_1[0]+C2_2[0];
-        C2[1] = C2_1[1]+C2_2[1];
-        C2[2] = C2_1[2]+C2_2[2];
-        C2[3] = C2_1[3]+C2_2[3];
+  C2[0] = C2_1[0]+C2_2[0];
+  C2[1] = C2_1[1]+C2_2[1];
+  C2[2] = C2_1[2]+C2_2[2];
+  C2[3] = C2_1[3]+C2_2[3];
         
-        //Add the second factor to the first to yield C1+C2
-        for(a=0;a<4;a++){
-            C12[a]=C1[a]+C2[a];
-        }
+  //Add the second factor to the first to yield C1+C2
+  for(a=0;a<4;a++){
+    C12[a]=C1[a]+C2[a];
+  }
 
-        //invert so to get the prefactor (C1+C2)^-1
-        determinant_C12=(C12[0]*C12[3])-(C12[1]*C12[2]);
-        C12_inverse[0]=C12[3]/determinant_C12;
-        C12_inverse[1]=-C12[1]/determinant_C12;
-        C12_inverse[2]=-C12[2]/determinant_C12;
-        C12_inverse[3]=C12[0]/determinant_C12;
+  //invert so to get the prefactor (C1+C2)^-1
+  determinant_C12=(C12[0]*C12[3])-(C12[1]*C12[2]);
+  C12_inverse[0]=C12[3]/determinant_C12;
+  C12_inverse[1]=-C12[1]/determinant_C12;
+  C12_inverse[2]=-C12[2]/determinant_C12;
+  C12_inverse[3]=C12[0]/determinant_C12;
 
-        //Multiply C2 to yield the first prefactor C2*(C1+C2)^-1
-        first_first[0]=(C2[0]*C12_inverse[0])+(C2[1]*C12_inverse[2]);
-        first_first[1]=(C2[0]*C12_inverse[1])+(C2[1]*C12_inverse[3]);
-        first_first[2]=(C2[2]*C12_inverse[0])+(C2[3]*C12_inverse[2]);
-        first_first[3]=(C2[2]*C12_inverse[1])+(C2[3]*C12_inverse[3]);
+  //Multiply C2 to yield the first prefactor C2*(C1+C2)^-1
+  first_first[0]=(C2[0]*C12_inverse[0])+(C2[1]*C12_inverse[2]);
+  first_first[1]=(C2[0]*C12_inverse[1])+(C2[1]*C12_inverse[3]);
+  first_first[2]=(C2[2]*C12_inverse[0])+(C2[3]*C12_inverse[2]);
+  first_first[3]=(C2[2]*C12_inverse[1])+(C2[3]*C12_inverse[3]);
 
-        //Same with C1 to yield the second prefactor C1*(C1+C2)^-1
-        second_first[0]=(C1[0]*C12_inverse[0])+(C1[1]*C12_inverse[2]);
-        second_first[1]=(C1[0]*C12_inverse[1])+(C1[1]*C12_inverse[3]);
-        second_first[2]=(C1[2]*C12_inverse[0])+(C1[3]*C12_inverse[2]);
-        second_first[3]=(C1[2]*C12_inverse[1])+(C1[3]*C12_inverse[3]);
+  //Same with C1 to yield the second prefactor C1*(C1+C2)^-1
+  second_first[0]=(C1[0]*C12_inverse[0])+(C1[1]*C12_inverse[2]);
+  second_first[1]=(C1[0]*C12_inverse[1])+(C1[1]*C12_inverse[3]);
+  second_first[2]=(C1[2]*C12_inverse[0])+(C1[3]*C12_inverse[2]);
+  second_first[3]=(C1[2]*C12_inverse[1])+(C1[3]*C12_inverse[3]);
 
-        //Now the second part of each factor (start with X drection)
-        y_0[0] = m0.x();
-        y_0[1] = tan(p0.x());
+   //Now the second part of each factor (start with X drection)
+   y_0[0] = m0.x();
+   y_0[1] = tan(p0.x());
         
-        y_2[0] = m1.x();
-        y_2[1] = tan(p1.x());
+   y_2[0] = m1.x();
+   y_2[1] = tan(p1.x());
 
-        // Start with R_0*S_in*Y0
-        first_second[0] = (RS_0[0]*y_0[0])+(RS_0[1]*y_0[1]);
-        first_second[1] = (RS_0[2]*y_0[0])+(RS_0[3]*y_0[1]);
+   // Start with R_0*S_in*Y0
+   first_second[0] = (RS_0[0]*y_0[0])+(RS_0[1]*y_0[1]);
+   first_second[1] = (RS_0[2]*y_0[0])+(RS_0[3]*y_0[1]);
 
-        // Now R1_inverse*S_out_inverse*Y2
-        second_second[0]=(RS_1[0]*y_2[0])+(RS_1[1]*y_2[1]);
-        second_second[1]=(RS_1[2]*y_2[0])+(RS_1[3]*y_2[1]);
+   // Now R1_inverse*S_out_inverse*Y2
+   second_second[0]=(RS_1[0]*y_2[0])+(RS_1[1]*y_2[1]);
+   second_second[1]=(RS_1[2]*y_2[0])+(RS_1[3]*y_2[1]);
         
-        // Put Everything together: (C2*(C1+C2)^-1)*(R_0*S_in*Y0)
-        first[0]=(first_first[0]*first_second[0])+(first_first[1]*first_second[1]);
-        first[1]=(first_first[2]*first_second[0])+(first_first[3]*first_second[1]);
-        //+(C1*(C1+C2)^-1)*(R_1_inverse*S_out_inverse*Y2)
-        second[0]=(second_first[0]*second_second[0])+(second_first[1]*second_second[1]);
-        second[1]=(second_first[2]*second_second[0])+(second_first[3]*second_second[1]);
+    // Put Everything together: (C2*(C1+C2)^-1)*(R_0*S_in*Y0)
+    first[0]=(first_first[0]*first_second[0])+(first_first[1]*first_second[1]);
+    first[1]=(first_first[2]*first_second[0])+(first_first[3]*first_second[1]);
+     //+(C1*(C1+C2)^-1)*(R_1_inverse*S_out_inverse*Y2)
+    second[0]=(second_first[0]*second_second[0])+(second_first[1]*second_second[1]);
+    second[1]=(second_first[2]*second_second[0])+(second_first[3]*second_second[1]);
         
-      X_mlp=(first[0]+second[0]); //=C2*(C1+C2)^-1 R0*S0*Y0 + C1*(C1+C2)^1 R1^-1*S1^-1*Y2
-      theta_X_mlp=(first[1]+second[1]);
+    X_mlp=(first[0]+second[0]); //=C2*(C1+C2)^-1 R0*S0*Y0 + C1*(C1+C2)^1 R1^-1*S1^-1*Y2
+    theta_X_mlp=(first[1]+second[1]);
         
-        // Now do the other direction
-        y_0[0] = m0.z();
-        y_0[1] = tan(p0.z());
+    // Now do the other direction
+    y_0[0] = m0.z();
+    y_0[1] = tan(p0.z());
         
-        y_2[0] = m1.z();
-        y_2[1] = tan(p1.z());
+    y_2[0] = m1.z();
+    y_2[1] = tan(p1.z());
 
-        // Again with respect to the other direction
-        first_second[0] = (RS_0[0]*y_0[0])+(RS_0[1]*y_0[1]);
-        first_second[1] = (RS_0[2]*y_0[0])+(RS_0[3]*y_0[1]);
+    // Again with respect to the other direction
+    first_second[0] = (RS_0[0]*y_0[0])+(RS_0[1]*y_0[1]);
+    first_second[1] = (RS_0[2]*y_0[0])+(RS_0[3]*y_0[1]);
 
-        second_second[0]=(RS_1[0]*y_2[0])+(RS_1[1]*y_2[1]);
-        second_second[1]=(RS_1[2]*y_2[0])+(RS_1[3]*y_2[1]);
+    second_second[0]=(RS_1[0]*y_2[0])+(RS_1[1]*y_2[1]);
+    second_second[1]=(RS_1[2]*y_2[0])+(RS_1[3]*y_2[1]);
         
-        // Put Everything together again
-        first[0]=(first_first[0]*first_second[0])+(first_first[1]*first_second[1]);
-        first[1]=(first_first[2]*first_second[0])+(first_first[3]*first_second[1]);
+    // Put Everything together again
+    first[0]=(first_first[0]*first_second[0])+(first_first[1]*first_second[1]);
+    first[1]=(first_first[2]*first_second[0])+(first_first[3]*first_second[1]);
 
-        second[0]=(second_first[0]*second_second[0])+(second_first[1]*second_second[1]);
-        second[1]=(second_first[2]*second_second[0])+(second_first[3]*second_second[1]);
+    second[0]=(second_first[0]*second_second[0])+(second_first[1]*second_second[1]);
+    second[1]=(second_first[2]*second_second[0])+(second_first[3]*second_second[1]);
         
-      Z_mlp=(first[0]+second[0]);
-      theta_Z_mlp=(first[1]+second[1]);
+    Z_mlp=(first[0]+second[0]);
+    theta_Z_mlp=(first[1]+second[1]);
       
-   	//---------------------------------------------------------------
+    //---------------------------------------------------------------
     //transform all cm back into mm again 
     //---------------------------------------------------------------
     Point->TPSx0 *=10.; Point->TPSy0 *=10.; Point->TPSz0 *=10.;
