@@ -3,7 +3,7 @@
 This repository contains all you need for reconstructing a proton radiograph from the simulations performed using the GATE framework in the *gate_pCT* repository.
 The output folder should have all the simulated data before reconstruction. Filenames might have changed and there are settings you can change inside the code, so you are required to make changes inside the code before producing an image. There's not much object oriented programming involved here and there's room for a lot of improvement and optimizations.<br />
 The pRad reconstruction performed here is threefold, one is preparing the simulation data in the **createTree.cc** to create a single root file with all the variables. This root file is then filtered and applied with a hull-algorithm in **filterSS.cc** (Single-Sided) or **filterDS.cc** (Double-Sided) to get all the positions and proton data ready for MLP and pRad reconstruction in **unfold_Single.cc** (Single-Sided pRad) or **unfold_Double.cc** (Double-Sided pRad).<br /> 
-I will list some of the settings to be changed below, but look inside the .cc files to find more documentation.
+I will list some of the settings to be changed below, but look inside the .cc files to find more documentation, I mark changing variables with three stars ***.
 
 REMEMBER to check all the paths to the appropriate output files from the GATE simulation!
 
