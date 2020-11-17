@@ -11,7 +11,7 @@ For more information about the tracking system properties chosen for the simulat
 
 For more information on the MLP algorithm applied to this work, see: <br /> A comprehensive theoretical comparison of proton imaging set-ups in terms of spatial resolution, N. Krah et.al., **DOI: 10.1088/1361-6560/aaca1f** <br />
 
-For more information about the radiograph reconstruction algorithm used, see: <br /> A maximum likelihood method for high resolution proton radiography/proton CT, C.A.Collins-Fekete et.al., DOI: **10.1088/0031-9155/61/23/8232** <br />
+For more information about the radiograph reconstruction algorithm used, see: <br /> A maximum likelihood method for high resolution proton radiography/proton CT, C.A.Collins-Fekete et.al., **DOI: 10.1088/0031-9155/61/23/8232** <br />
 
 For more information on how this code has been used and results from it, see: <br /> Image quality of list-mode proton imaging without front trackers, J.R. Sølie, et. al., **DOI: 10.1088/1361-6560/ab8ddb**<br />
 
