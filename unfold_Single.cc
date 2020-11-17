@@ -45,7 +45,7 @@ double d_source = 660.0; //*** cm (6.6m distance to scanning magnets/source)
 double s_pos = 0.3; //*** cm beam spot size at isocenter (from simulations)
 double s_angle = 0.003; //*** rad This should be the uncertainty on the TPS angle  
 
-double s_pos_out = 0.0; //*** cm Position unc. in tracking layers, 0 = ideal detector, 0.0005 = Bergen detector, 0.0228 = LomaLinda
+double s_pos_out = 0.0005; //*** cm Position unc. in tracking layers, 0 = ideal detector, 0.0005 = Bergen detector
 
 double d_entry = 0; //*** cm OBS If not using manual hull, change accordingly (=0.0 if manual hull is used or found)
 double d_exit = 0; //*** cm
@@ -158,7 +158,7 @@ int main(int argc, char *argv[]){
     angleX = Point.p2x - Point.p1x;
     angleZ = Point.p2z - Point.p1z;
     WEPLn = Point.weplReal;
-       
+    //I prefer using the fwhm for the wepl filter instead of the 2.5 sigma   
     if( WEPLn >= (WEPLMean->GetBinContent(binGlobal) - 1*WEPLfwhm->GetBinContent(binGlobal)) && WEPLn <= (WEPLMean->GetBinContent(binGlobal) + 1*WEPLfwhm->GetBinContent(binGlobal)) &&
 	//WEPLn >= (WEPLMean->GetBinContent(binGlobal) - 2.5*WEPLSig->GetBinContent(binGlobal)) && WEPLn <= (WEPLMean->GetBinContent(binGlobal) + 2.5*WEPLSig->GetBinContent(binGlobal)) &&
         angleX >= (angleMeanX->GetBinContent(binGlobal) - 2.5*angleSigX->GetBinContent(binGlobal)) && angleX <= (angleMeanX->GetBinContent(binGlobal) + 2.5*angleSigX->GetBinContent(binGlobal)) && 
@@ -323,12 +323,12 @@ void ComputeMLP(Proton *Point, TProfile2D* project2D, float s_pos){
     double first[2] = {0};
     double second[2]={0};
 
-    //Initialize the image reconstruction variables
+    //-------------Initialize the image reconstruction variables!-------
     std::map<pair<int,int>,double> Lengthmap; // Image grid that will contain all path information (length spent in each image column)
     std::pair<std::map<std::pair<int,int>,double>::iterator,bool> ret;
     int binx,biny,binz;
     double TotL = 0;
-    
+    //------------------------------------
     //Parameter initialization
     double sy1, sy2, st1, st2, sty1, sty2;
     double determinant_1, determinant_2, determinant_C12;
@@ -507,8 +507,9 @@ void ComputeMLP(Proton *Point, TProfile2D* project2D, float s_pos){
       Z_mlp=(first[0]+second[0]);
       theta_Z_mlp=(first[1]+second[1]);
       Z_mlp_sigma = second_first[2] * C2[1] + second_first[3] * C2[3];
-        
-      p = TVector3(X_mlp, posy, Z_mlp);
+   
+    // This is where the reconstruction is happening where the proton length spent inside each channel is accounted for and weights the proton wepl accordingly
+    p = TVector3(X_mlp, posy, Z_mlp);
       
     binx = project2D->GetXaxis()->FindBin(p.x()*10.0); //find the image bin we are in in the two traverse directions z and x
     binz = project2D->GetYaxis()->FindBin(p.z()*10.0);  
@@ -526,7 +527,7 @@ void ComputeMLP(Proton *Point, TProfile2D* project2D, float s_pos){
 
   std::map<std::pair<int,int>,double>::iterator it;
  
-  //2D Full path
+  //This is where the image is filled up and weighted!
   for(it = Lengthmap.begin(); it != Lengthmap.end(); it++) { //Goes through the Lengthmap
     int BinX = it->first.first;
     int BinZ = it->first.second;
